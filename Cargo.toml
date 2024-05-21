@@ -1,0 +1,2 @@
+[workspace]
+members = ["xtask", "hide-me", "hide-me-common"]
