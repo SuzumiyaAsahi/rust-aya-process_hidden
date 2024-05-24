@@ -39,10 +39,21 @@ async fn main() -> Result<(), anyhow::Error> {
     program.attach("syscalls", "sys_exit_getdents64")?;
 
     let mut prog_array = ProgramArray::try_from(bpf.take_map("JUMP_TABLE").unwrap())?;
-    let prog_0: &mut TracePoint = bpf.program_mut("example_prog_0").unwrap().try_into()?;
+    let prog_0: &mut TracePoint = bpf
+        .program_mut("handle_getdents_exit")
+        .unwrap()
+        .try_into()?;
     prog_0.load()?;
     let prog_0_fd = prog_0.fd().unwrap();
     prog_array.set(0, prog_0_fd, 0).unwrap();
+
+    let prog_1: &mut TracePoint = bpf
+        .program_mut("handle_getdents_patch")
+        .unwrap()
+        .try_into()?;
+    prog_1.load()?;
+    let prog_1_fd = prog_1.fd().unwrap();
+    prog_array.set(1, prog_1_fd, 0).unwrap();
 
     info!("Waiting for Ctrl-C...");
     signal::ctrl_c().await?;
