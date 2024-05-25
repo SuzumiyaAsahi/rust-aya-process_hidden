@@ -1,10 +1,7 @@
 #![no_std]
 #![no_main]
 
-use core::ops::Add;
-
 use aya_ebpf::{
-    cty::{self, c_int, c_ulong},
     helpers::{bpf_get_current_pid_tgid, bpf_get_current_task, bpf_probe_read_kernel},
     macros::{map, tracepoint},
     maps::ProgramArray,
@@ -35,29 +32,22 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
     let pid_tgid = bpf_get_current_pid_tgid();
 
     if pid_tgid != 0 {
-        // struct task_struct *       real_parent;          /*  1448     8 */
-        // pid_t                      tgid;                 /*  1436     4 */
         let ppid = unsafe {
             let task = bpf_get_current_task() as *const task_struct;
 
-            let real_parent = (*task).tgid;
+            let real_parent = bpf_probe_read_kernel::<task_struct>((*task).real_parent).unwrap();
 
-            // let ppid = (*real_parent).tgid;
-            // info!(&ctx, "task is {:x}", task as u64);
-            // info!(&ctx, "real_parent address: {:x}", real_parent as u64);
-            real_parent
+            info!(
+                &ctx,
+                "real_parent address: {:x}",
+                core::ptr::addr_of!(real_parent) as u64
+            );
+
+            real_parent.tgid
         };
+
+        info!(&ctx, "ppid is {}", ppid);
     }
-    // let real_parent_ptr = task.add(1448) as *const *const cty::c_void; // 指向 real_parent 的指针的指针
-    // let real_parent =
-    //     unsafe { bpf_probe_read_kernel::<*const cty::c_void>(real_parent_ptr).unwrap() };
-    //
-    // info!(&ctx, "tracepoint syscalls called");
-    // unsafe {
-    //     if JUMP_TABLE.tail_call(&ctx, PROG_HANDLER).is_err() {
-    //         return Ok(0);
-    //     };
-    // }
     Ok(0)
 }
 
