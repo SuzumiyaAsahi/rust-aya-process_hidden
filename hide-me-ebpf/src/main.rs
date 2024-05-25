@@ -1,6 +1,6 @@
 #![no_std]
 #![no_main]
-use core::mem::offset_of;
+use core::mem::{self, offset_of};
 
 use aya_ebpf::{
     helpers::{bpf_get_current_pid_tgid, bpf_get_current_task, bpf_probe_read_kernel},
@@ -51,12 +51,20 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
             }
 
             if real_parent.is_ok() {
-                info!(&ctx, "ok, real_parent is {}", real_parent.unwrap() as u64);
+                info!(
+                    &ctx,
+                    "ok, real_parent is Ox{:x}",
+                    real_parent.unwrap() as u64
+                );
+
+                bpf_probe_read_kernel::<i32>(
+                    (real_parent.unwrap() as usize + mem::offset_of!(task_struct, tgid))
+                        as *const i32,
+                )
+                .unwrap();
 
                 return Ok(0);
             }
-
-            // (*real_parent).tgid
         };
 
         // info!(&ctx, "ppid is {}", ppid);
