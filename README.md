@@ -1,5 +1,11 @@
 # hide-me
 
+## 使用 pahole 查看内核数据结构
+
+```shell
+pahole -C task_struct | grep tgid
+```
+
 ## Prerequisites
 
 1. Install bpf-linker: `cargo install bpf-linker`

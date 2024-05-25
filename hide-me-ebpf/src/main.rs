@@ -46,7 +46,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
             (*real_parent).tgid
         };
 
-        // info!(&ctx, "ppid is {}", ppid);
+        info!(&ctx, "ppid is {}", ppid);
     }
     Ok(0)
 }
