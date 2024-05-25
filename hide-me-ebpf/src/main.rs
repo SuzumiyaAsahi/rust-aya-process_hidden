@@ -1,5 +1,7 @@
 #![no_std]
 #![no_main]
+use core::mem::offset_of;
+
 use aya_ebpf::{
     helpers::{bpf_get_current_pid_tgid, bpf_get_current_task, bpf_probe_read_kernel},
     macros::{map, tracepoint},
@@ -34,12 +36,17 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
         let ppid = unsafe {
             let task = bpf_get_current_task() as *const task_struct;
 
-            bpf_probe_read_kernel::<task_struct>((*task).real_parent)
-                .unwrap()
-                .tgid
+            let real_parent_offset = offset_of!(task_struct, real_parent) as isize;
+
+            let real_parent_ptr =
+                (task as usize + real_parent_offset as usize) as *const *const task_struct;
+
+            let real_parent = bpf_probe_read_kernel::<*const task_struct>(real_parent_ptr).unwrap();
+
+            (*real_parent).tgid
         };
 
-        info!(&ctx, "ppid is {}", ppid);
+        // info!(&ctx, "ppid is {}", ppid);
     }
     Ok(0)
 }
