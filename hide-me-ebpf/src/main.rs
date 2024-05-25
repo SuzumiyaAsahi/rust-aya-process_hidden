@@ -38,6 +38,8 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
 
             let real_parent_offset = offset_of!(task_struct, real_parent) as isize;
 
+            info!(&ctx, "{}", real_parent_offset);
+
             let real_parent_ptr =
                 (task as usize + real_parent_offset as usize) as *const *const task_struct;
 
