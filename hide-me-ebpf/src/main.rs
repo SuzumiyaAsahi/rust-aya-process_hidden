@@ -50,6 +50,12 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
                 return Err(0);
             }
 
+            if real_parent.is_ok() {
+                info!(&ctx, "ok, real_parent is {}", real_parent.unwrap() as u64);
+
+                return Ok(0);
+            }
+
             // (*real_parent).tgid
         };
 
