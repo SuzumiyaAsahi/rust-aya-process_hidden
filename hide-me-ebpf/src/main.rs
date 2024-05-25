@@ -56,18 +56,14 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
                     "ok, real_parent is Ox{:x}",
                     real_parent.unwrap() as u64
                 );
-
-                bpf_probe_read_kernel::<i32>(
-                    (real_parent.unwrap() as usize + mem::offset_of!(task_struct, tgid))
-                        as *const i32,
-                )
-                .unwrap();
-
-                return Ok(0);
             }
+            bpf_probe_read_kernel::<i32>(
+                (real_parent.unwrap() as usize + mem::offset_of!(task_struct, tgid)) as *const i32,
+            )
+            .unwrap()
         };
 
-        // info!(&ctx, "ppid is {}", ppid);
+        info!(&ctx, "ppid is {}", ppid);
     }
     Ok(0)
 }
