@@ -36,27 +36,28 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
         let ppid = unsafe {
             let task = bpf_get_current_task() as *const task_struct;
 
-            let real_parent_offset = offset_of!(task_struct, real_parent) as isize;
+            // let real_parent_offset = offset_of!(task_struct, real_parent) as isize;
 
-            info!(&ctx, "{}", real_parent_offset);
+            // let real_parent_ptr = (task as usize + offset_of!(task_struct, real_parent) as isize)
+            //     as *const *const task_struct;
 
-            let real_parent_ptr =
-                (task as usize + real_parent_offset as usize) as *const *const task_struct;
+            let real_parent = bpf_probe_read_kernel::<*const task_struct>(
+                (task as usize + offset_of!(task_struct, real_parent)) as *const *const task_struct,
+            );
 
-            let real_parent = bpf_probe_read_kernel::<*const task_struct>(real_parent_ptr);
+            // if real_parent.is_err() {
+            //     info!(&ctx, "fuck you");
+            //     return Err(0);
+            // }
+            //
+            // if real_parent.is_ok() {
+            //     info!(
+            //         &ctx,
+            //         "ok, real_parent is Ox{:x}",
+            //         real_parent.unwrap() as u64
+            //     );
+            // }
 
-            if real_parent.is_err() {
-                info!(&ctx, "fuck you");
-                return Err(0);
-            }
-
-            if real_parent.is_ok() {
-                info!(
-                    &ctx,
-                    "ok, real_parent is Ox{:x}",
-                    real_parent.unwrap() as u64
-                );
-            }
             bpf_probe_read_kernel::<i32>(
                 (real_parent.unwrap() as usize + mem::offset_of!(task_struct, tgid)) as *const i32,
             )
