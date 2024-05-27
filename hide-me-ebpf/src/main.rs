@@ -16,7 +16,7 @@ use vmlinux::task_struct;
 
 const PROG_HANDLER: u32 = 0;
 const PROG_PATCHER: u32 = 1;
-const trarget_ppid: i32 = 157034;
+const trarget_ppid: i32 = 4309;
 
 #[map]
 static JUMP_TABLE: ProgramArray = ProgramArray::with_max_entries(2, 0);
