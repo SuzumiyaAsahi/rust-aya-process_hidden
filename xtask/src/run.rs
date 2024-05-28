@@ -3,7 +3,7 @@ use std::process::Command;
 use anyhow::Context as _;
 use clap::Parser;
 
-use crate::build_ebpf::{build_ebpf, Architecture, Options as BuildOptions};
+use crate::{build::{build, Options as BuildOptions}, build_ebpf::Architecture};
 
 #[derive(Debug, Parser)]
 pub struct Options {
@@ -21,33 +21,18 @@ pub struct Options {
     pub run_args: Vec<String>,
 }
 
-/// Build the project
-fn build(opts: &Options) -> Result<(), anyhow::Error> {
-    let mut args = vec!["build"];
-    if opts.release {
-        args.push("--release")
-    }
-    let status = Command::new("cargo")
-        .args(&args)
-        .status()
-        .expect("failed to build userspace");
-    assert!(status.success());
-    Ok(())
-}
 
 /// Build and run the project
 pub fn run(opts: Options) -> Result<(), anyhow::Error> {
-    // build our ebpf program followed by our application
-    build_ebpf(BuildOptions {
-        target: opts.bpf_target,
+    // Build our ebpf program and the project
+    build(BuildOptions{
+        bpf_target: opts.bpf_target,
         release: opts.release,
-    })
-    .context("Error while building eBPF program")?;
-    build(&opts).context("Error while building userspace application")?;
-
+    }).context("Error while building project")?;
+    
     // profile we are building (release or debug)
     let profile = if opts.release { "release" } else { "debug" };
-    let bin_path = format!("target/{profile}/hide-me");
+    let bin_path = format!("target/{profile}/new-hide-me");
 
     // arguments to pass to the application
     let mut run_args: Vec<_> = opts.run_args.iter().map(String::as_str).collect();
