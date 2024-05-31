@@ -1,16 +1,16 @@
 #![no_std]
 #![no_main]
 
-use core::mem::{self, offset_of};
+use core::mem::offset_of;
 
 use aya_ebpf::{
     helpers::{bpf_get_current_pid_tgid, bpf_get_current_task, bpf_probe_read_kernel},
     macros::{map, tracepoint},
     maps::ProgramArray,
     programs::TracePointContext,
-    EbpfContext,
 };
 use aya_log_ebpf::info;
+
 use vmlinux::vmlinux::task_struct;
 
 #[path = "./vmlinux/mod.rs"]
@@ -43,7 +43,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
             );
 
             bpf_probe_read_kernel::<i32>(
-                (real_parent.unwrap() as usize + mem::offset_of!(task_struct, tgid)) as *const i32,
+                (real_parent.unwrap() as usize + offset_of!(task_struct, tgid)) as *const i32,
             )
             .unwrap()
         };
@@ -54,8 +54,10 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
     }
 
     let pid = pid_tgid >> 32;
-    let fd: u32 = unsafe { ctx.read_at(16).unwrap() };
-    let buff_count: u32 = unsafe { ctx.read_at(32).unwrap() };
+    unsafe {
+        let fd: u32 = ctx.read_at(16).unwrap();
+        let buff_count: u32 = ctx.read_at(32).unwrap();
+    }
 
     // let dirp:  = unsafe { ctx.read_at(24).unwrap() };
 
