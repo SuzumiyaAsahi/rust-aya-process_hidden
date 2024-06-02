@@ -1,10 +1,19 @@
+use aya::maps::HashMap;
 use aya::{include_bytes_aligned, maps::array::ProgramArray, programs::TracePoint, Bpf};
 use aya_log::BpfLogger;
+use clap::Parser;
 use log::{debug, info, warn};
 use tokio::signal;
 
+#[derive(Debug, Parser)]
+struct TargetPpid {
+    #[clap(short, long, default_value = 0)]
+    ppid: i32,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    let opt = TargetPpid::parse();
     env_logger::init();
 
     // Bump the memlock rlimit. This is needed for older kernels that don't use the
@@ -54,6 +63,11 @@ async fn main() -> Result<(), anyhow::Error> {
     prog_1.load()?;
     let prog_1_fd = prog_1.fd().unwrap();
     prog_array.set(1, prog_1_fd, 0).unwrap();
+
+    let mut target_ppid: HashMap<_, u8, i32> =
+        HashMap::try_from(bpf.map_mut("target_ppid").unwrap())?;
+
+    target_ppid.insert(0, &opt.ppid, 0).unwrap();
 
     info!("Waiting for Ctrl-C...");
     signal::ctrl_c().await?;
