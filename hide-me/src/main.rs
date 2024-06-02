@@ -1,5 +1,5 @@
+use aya::{Bpf, include_bytes_aligned, maps::array::ProgramArray, programs::TracePoint};
 use aya::maps::HashMap;
-use aya::{include_bytes_aligned, maps::array::ProgramArray, programs::TracePoint, Bpf};
 use aya_log::BpfLogger;
 use clap::Parser;
 use log::{debug, info, warn};
@@ -7,7 +7,7 @@ use tokio::signal;
 
 #[derive(Debug, Parser)]
 struct TargetPpid {
-    #[clap(short, long, default_value = 0)]
+    #[clap(short, long, default_value = "0")]
     ppid: i32,
 }
 
@@ -32,11 +32,11 @@ async fn main() -> Result<(), anyhow::Error> {
     // like to specify the eBPF program at runtime rather than at compile-time, you can
     // reach for `Bpf::load_file` instead.
     #[cfg(debug_assertions)]
-    let mut bpf = Bpf::load(include_bytes_aligned!(
+        let mut bpf = Bpf::load(include_bytes_aligned!(
         "../../target/bpfel-unknown-none/debug/hide-me"
     ))?;
     #[cfg(not(debug_assertions))]
-    let mut bpf = Bpf::load(include_bytes_aligned!(
+        let mut bpf = Bpf::load(include_bytes_aligned!(
         "../../target/bpfel-unknown-none/release/hide-me"
     ))?;
     if let Err(e) = BpfLogger::init(&mut bpf) {
