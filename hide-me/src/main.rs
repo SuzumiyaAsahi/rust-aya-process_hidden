@@ -1,5 +1,4 @@
-use aya::{Bpf, include_bytes_aligned, maps::array::ProgramArray, programs::TracePoint};
-use aya::maps::HashMap;
+use aya::{Bpf, include_bytes_aligned, maps::{array::ProgramArray, HashMap}, programs::TracePoint};
 use aya_log::BpfLogger;
 use clap::Parser;
 use log::{debug, info, warn};
