@@ -9,8 +9,6 @@ use clap::Parser;
 use log::{debug, info, warn};
 use tokio::signal;
 
-use hide_me_common::RET;
-
 #[derive(Debug, Parser)]
 struct TargetPpid {
     #[clap(short, long, default_value = "0")]
@@ -51,13 +49,6 @@ async fn main() -> Result<(), anyhow::Error> {
         // This can happen if you remove all log statements from your eBPF program.
         warn!("failed to initialize eBPF logger: {}", e);
     }
-
-    unsafe {
-        let mut version = core::ptr::read_volatile(&RET);
-        version = 16;
-    }
-
-    // let ebof = aya::BpfLoader::new().set_global("RET", &16, true)?;
 
     let mut target_ppid: HashMap<_, u8, i32> =
         HashMap::try_from(bpf.map_mut("target_ppid").unwrap())?;

