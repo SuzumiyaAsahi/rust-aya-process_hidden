@@ -52,7 +52,12 @@ async fn main() -> Result<(), anyhow::Error> {
         warn!("failed to initialize eBPF logger: {}", e);
     }
 
-    let ebof = aya::BpfLoader::new().set_global("RET", &16, true);
+    unsafe {
+        let mut version = core::ptr::read_volatile(&RET);
+        version = 16;
+    }
+
+    // let ebof = aya::BpfLoader::new().set_global("RET", &16, true)?;
 
     let mut target_ppid: HashMap<_, u8, i32> =
         HashMap::try_from(bpf.map_mut("target_ppid").unwrap())?;
