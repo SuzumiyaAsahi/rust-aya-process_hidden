@@ -53,7 +53,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut target_ppid: HashMap<_, u8, i32> =
         HashMap::try_from(bpf.map_mut("target_ppid").unwrap())?;
 
-    target_ppid.insert(0, &opt.ppid, 0).unwrap();
+    target_ppid.insert(0, opt.ppid, 0).unwrap();
 
     let program: &mut TracePoint = bpf.program_mut("hide_me").unwrap().try_into()?;
     program.load()?;

