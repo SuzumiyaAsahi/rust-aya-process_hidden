@@ -54,6 +54,7 @@ pub fn hide_me(ctx: TracePointContext) -> u32 {
 }
 
 fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
+    info!(&ctx, "target_ppid_len is {}", pid_to_hide_len);
     let the_target_ppid = unsafe { target_ppid.get(&0) };
 
     if the_target_ppid.is_none() {
