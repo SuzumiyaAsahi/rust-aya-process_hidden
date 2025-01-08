@@ -5,14 +5,20 @@ edition = "2021"
 publish = false
 
 [dependencies]
-aya = "0.12"
-aya-log = "0.2"
+aya = "0.13.1"
+aya-log = "0.2.1"
 hide-me-common = { path = "../hide-me-common", features = ["user"] }
 anyhow = "1"
-env_logger = "0.10"
+env_logger = "0.11.6"
 libc = "0.2"
 log = "0.4"
-tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "net", "signal"] }
+tokio = { version = "1.25", features = [
+  "macros",
+  "rt",
+  "rt-multi-thread",
+  "net",
+  "signal",
+] }
 clap = { version = "4.5.4", features = ["derive"] }
 
 [[bin]]
