@@ -28,5 +28,5 @@ cargo build
 ## Run
 
 ```bash
-RUST_LOG=info cargo xtask run
+RUST_LOG=info cargo xtask run -- --ppid 123456
 ```

