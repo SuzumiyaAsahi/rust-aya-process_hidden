@@ -1,3 +1,6 @@
+# Description: A simple server that listens on port 8888
+# and sends "Hello, World!" to any client that connects to it.
+# 测试进程隐藏的简易样品
 import socket
 
 def start_server():
