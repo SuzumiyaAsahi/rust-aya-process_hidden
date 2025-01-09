@@ -54,4 +54,12 @@ Although it is just a toy now.
 
 Aya Discord members, I couldn't finish this job without your selfness help and patient answers.
 
-ChatGpt, Thanks for your company, Thanks for your help resolving terrbile problems with me.
+ChatGpt, Thanks for your company, Thanks for you help resolving terrbile problems with me.
+
+Doc.ChongHaoRen, Thanks for your scientific methodology view, which makes me overcome some narrow viewpoints, makes me solve problems more flexibly.
+
+## Reference
+
+[如何借助eBPF打造隐蔽的后门](https://xz.aliyun.com/t/12173?time__1311=mqmhD5DK7IejoxBT4%2BxCq1rDcjoqD8FKbeD&alichlgref=https%3A%2F%2Fgithub.com%2Fpic4xiu%2FSomethingToPlay%2Ftree%2Fmain%2Febpf)
+
+[bad ebpf](https://github.com/pathtofile/bad-bpf)
