@@ -30,3 +30,15 @@ cargo build
 ```bash
 RUST_LOG=info cargo xtask run -- --ppid 123456
 ```
+
+## pid 与 tgid 的说明与过滤方法（虽然本次基本没用上）
+
+[如何在 BPF 程序中正确地按照 PID 过滤？](https://www.ebpf.top/post/ebpf_prog_pid_filter/)
+
+## 如何查看系统调用参数
+
+```bash
+cat /sys/kernel/debug/tracing/events/syscalls/sys_enter_getdents64/format
+
+cat /sys/kernel/debug/tracing/events/syscalls/sys_exit_getdents64/format
+```

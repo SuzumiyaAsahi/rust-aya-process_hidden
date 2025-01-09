@@ -8,19 +8,19 @@ use tokio::signal;
 #[derive(Debug, Parser)]
 struct TargetPpid {
     #[clap(short, long, default_value = "0")]
-    ppid: u64,
+    pid: u64,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let opt = TargetPpid::parse();
 
-    if opt.ppid == 0 {
+    if opt.pid == 0 {
         println!("ppid is 0, nothing to hide");
         return Ok(());
     }
 
-    let _line = opt.ppid.to_string();
+    let _line = opt.pid.to_string();
     let mut line: [u8; MAX_FILE_LEN] = [0; MAX_FILE_LEN];
     line[.._line.len()].copy_from_slice(_line.as_bytes());
 
@@ -44,10 +44,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut bpf = EbpfLoader::new()
         .set_global(
             "pid_to_hide_len",
-            &(opt.ppid.to_string().len() as u32 + 1),
+            &(_line.len() as u32 + 1),
             true,
         )
-        .set_global("target_ppid", &opt.ppid, true)
+        .set_global("target_pid", &opt.pid, true)
         .set_global("pid_to_hide", &line, true)
         .load(include_bytes_aligned!(
             "../../target/bpfel-unknown-none/debug/hide-me"
