@@ -2,7 +2,15 @@
 
 ## Prerequisites
 
-1. Install bpf-linker: `cargo install bpf-linker`
+```bash
+# It should be excuted in root
+cargo install bpf-linker
+
+# Maybe you will encounter that the cc is missing
+# Just install it 
+apt update
+apt install build-essential
+```
 
 ## Build eBPF
 
@@ -41,3 +49,9 @@ Although it is just a toy now.
 ![1](./img/1.png)
 ![2](./img/2.png)
 ![3](./img/3.png)
+
+## Thanks
+
+Aya Discord members, I couldn't finish this job without your selfness help and patient answers.
+
+ChatGpt, Thanks for your company, Thanks for your help resolving terrbile problems with me.
